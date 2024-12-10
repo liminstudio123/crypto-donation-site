@@ -266,7 +266,8 @@
         
         // Target amount configuration
         const TARGET_AMOUNT_USD = 10000000; // $10M
-        let currentTotalUSD = 0;
+        const INITIAL_AMOUNT_USD = 1976500; // $1,976,500 初始金额
+        let currentTotalUSD = INITIAL_AMOUNT_USD; // 初始化当前总额
 
         // 分页状态管理
         let currentPage = 1;
@@ -347,13 +348,19 @@
         }
 
         // Update progress bar
-        function updateProgress(totalUSD) {
+        function updateProgress(newDonationsUSD) {
             const progressBar = document.getElementById('progress-bar');
             const progressText = document.getElementById('progress-text');
+            
+            // 计算总金额（初始金额 + 新捐款）
+            const totalUSD = INITIAL_AMOUNT_USD + newDonationsUSD;
             const percentage = (totalUSD / TARGET_AMOUNT_USD) * 100;
             
+            // 更新进度条
             progressBar.style.width = `${Math.min(percentage, 100)}%`;
             progressBar.textContent = `${percentage.toFixed(2)}%`;
+            
+            // 更新文本显示
             progressText.textContent = `Current Donations: $${totalUSD.toLocaleString()} / $${TARGET_AMOUNT_USD.toLocaleString()}`;
         }
 
@@ -502,7 +509,7 @@ Thank you for your generosity! 🙏
             
             try {
                 const prices = await getCryptoPrices();
-                let totalUSD = 0;
+                let newDonationsUSD = 0; // 新收到的捐款金额
                 const transactions = [];
 
                 for (const [coinType, config] of Object.entries(CRYPTO_CONFIG)) {
@@ -512,7 +519,7 @@ Thank you for your generosity! 🙏
                         for (const tx of txs) {
                             const amount = tx.amount / Math.pow(10, config.decimals);
                             const usdValue = amount * prices[coinType.toLowerCase()].usd;
-                            totalUSD += usdValue;
+                            newDonationsUSD += usdValue;
 
                             transactions.push({
                                 coinType,
@@ -531,9 +538,15 @@ Thank you for your generosity! 🙏
                     }
                 }
 
-                updateProgress(totalUSD);
-                updateTransactionList(transactions);
-                currentTotalUSD = totalUSD;
+                // 更新进度条，传入新捐款金额
+                updateProgress(newDonationsUSD);
+                
+                // 更新交易记录显示
+                allTransactions = transactions.sort((a, b) => b.time - a.time);
+                displayCurrentPageTransactions();
+                
+                // 更新当前总额
+                currentTotalUSD = INITIAL_AMOUNT_USD + newDonationsUSD;
             } catch (error) {
                 console.error('Error in checkDonations:', error);
             } finally {
@@ -543,6 +556,9 @@ Thank you for your generosity! 🙏
 
         // Add event listeners
         document.addEventListener('DOMContentLoaded', function() {
+            // 显示初始进度
+            updateProgress(0); // 传入0表示仅显示初始金额
+            
             // Pagination controls
             document.getElementById('prev-page').addEventListener('click', () => {
                 if (currentPage > 1) {
