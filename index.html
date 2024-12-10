@@ -35,63 +35,135 @@
             line-height: 30px;
             color: white;
             font-weight: bold;
+            transition: width 0.5s ease-in-out;
         }
         .donation-info {
             text-align: center;
             margin: 20px 0;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
         }
         .crypto-address {
-            display: inline-block;
-            margin: 10px;
+            flex: 0 1 300px;
             background: #fff;
             border: 1px solid #ddd;
             border-radius: 10px;
-            padding: 10px;
+            padding: 15px;
             text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         .crypto-address input {
-            border: none;
-            background: transparent;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #f9f9f9;
             cursor: pointer;
-            width: 100%;
+            width: 90%;
+            padding: 8px;
+            margin: 10px 0;
             text-align: center;
+            font-size: 14px;
         }
         .crypto-address img {
             width: 150px;
             height: 150px;
             display: block;
             margin: 10px auto;
+            border-radius: 10px;
         }
         #story {
             font-size: 18px;
             line-height: 1.6;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         #read-more {
             color: #007BFF;
             cursor: pointer;
+            text-decoration: underline;
         }
         .crypto-address button {
             margin-top: 10px;
-            padding: 5px 15px;
+            padding: 8px 20px;
             background-color: #4caf50;
             border: none;
             color: white;
             font-weight: bold;
             border-radius: 5px;
             cursor: pointer;
+            transition: background-color 0.3s;
         }
         .crypto-address button:hover {
             background-color: #45a049;
         }
-        #transaction-records {
-            list-style: none;
-            padding: 0;
-        }
-        #transaction-records li {
+        .transaction-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 20px 0;
             padding: 10px;
-            background-color: #f8f8f8;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .pagination {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .pagination button {
+            padding: 8px 16px;
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .pagination button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #records-per-page {
+            padding: 5px;
+            border-radius: 4px;
             border: 1px solid #ddd;
-            margin: 5px 0;
+        }
+        #page-info {
+            font-weight: bold;
+        }
+        .transaction-item {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border-left: 4px solid #4caf50;
+        }
+        .transaction-item.new {
+            animation: highlight 2s ease-out;
+        }
+        @keyframes highlight {
+            0% { background-color: #e8f5e9; }
+            100% { background-color: white; }
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            display: none;
+        }
+        .loading:after {
+            content: "...";
+            animation: dots 1s steps(5, end) infinite;
+        }
+        @keyframes dots {
+            0%, 20% { content: "."; }
+            40% { content: ".."; }
+            60% { content: "..."; }
+            80% { content: "...."; }
+            100% { content: "....."; }
         }
     </style>
 </head>
@@ -113,9 +185,9 @@
                 <span id="read-more">Read More</span>
             </p>
             <p id="full-story" style="display:none;">
-                However, fate has a way of surprising you when you least expect it. A few years ago, I stumbled upon the concept of cryptocurrency. At that time, I didn’t understand what Bitcoin, Ethereum, or blockchain were. I just knew that they were different from the traditional banking and financial systems I was familiar with...
+                However, fate has a way of surprising you when you least expect it. A few years ago, I stumbled upon the concept of cryptocurrency. At that time, I didn't understand what Bitcoin, Ethereum, or blockchain were. I just knew that they were different from the traditional banking and financial systems I was familiar with...
                 <br><br>
-                What excited me the most was that cryptocurrency didn’t rely on traditional banks or institutions. It gave people like me, ordinary individuals, a fair opportunity, free from the constraints of the financial system. This realization filled me with hope, and I understood that this could be my chance to change my fate...
+                What excited me the most was that cryptocurrency didn't rely on traditional banks or institutions. It gave people like me, ordinary individuals, a fair opportunity, free from the constraints of the financial system. This realization filled me with hope, and I understood that this could be my chance to change my fate...
                 <br><br>
                 To realize this vision, I need substantial financial backing—my goal is to raise $10 million in cryptocurrency. This capital will help me build a platform, train more people to learn about cryptocurrency, and help them navigate the cryptocurrency market. I am confident that this money will not only change my life but also create opportunities for many others, bringing hope and new beginnings to those in need...
             </p>
@@ -166,140 +238,338 @@
             </div>
         </div>
 
+        <div class="loading" id="loading">Checking for new donations</div>
+
         <h2>Transaction Records</h2>
+        <div class="transaction-controls">
+            <select id="records-per-page">
+                <option value="5">5 per page</option>
+                <option value="10" selected>10 per page</option>
+            </select>
+            <div class="pagination">
+                <button id="prev-page" disabled>Previous</button>
+                <span id="page-info">Page 1</span>
+                <button id="next-page">Next</button>
+            </div>
+        </div>
         <ul id="transaction-records">
             <!-- Transaction records will appear here -->
         </ul>
-
     </div>
-
     <script>
+        // API Configuration
+        const COINGECKO_API = 'https://api.coingecko.com/api/v3';
+        
         // Telegram Bot Configuration
         const botToken = "8047677559:AAG_a68ZiL4pTecSKwNDCHLH7mVyU1WSLTY";
         const chatId = "7133970706";
+        
+        // Target amount configuration
+        const TARGET_AMOUNT_USD = 10000000; // $10M
+        let currentTotalUSD = 0;
+
+        // 分页状态管理
+        let currentPage = 1;
+        let recordsPerPage = 10;
+        let allTransactions = [];
+
+        // Cryptocurrency configuration
+        const CRYPTO_CONFIG = {
+            'BTC': {
+                address: "bc1qu2f5d8f4q3h9w8d7rg6d5zd20ehk0j68a2yrk9",
+                decimals: 8,
+                explorer: "https://blockchair.com/bitcoin/transaction/",
+                apiKey: "YOUR_BLOCKCHAIR_API_KEY"
+            },
+            'ETH': {
+                address: "0xcBC882F5d23F66951cc7DCE2632944dE3014B494",
+                decimals: 18,
+                explorer: "https://etherscan.io/tx/",
+                apiKey: "YOUR_ETHERSCAN_API_KEY"
+            },
+            'DOGE': {
+                address: "D63ewjeSWkmjVPQiKisyHJEZWnJw92eafj",
+                decimals: 8,
+                explorer: "https://dogechain.info/tx/",
+                apiKey: "YOUR_DOGECHAIN_API_KEY"
+            },
+            'USDT': {
+                address: "TNZar2Ps5b2h9CubD8PciTtdJf3NQj7pws",
+                decimals: 6,
+                explorer: "https://tronscan.org/#/transaction/",
+                apiKey: "YOUR_TRONGRID_API_KEY"
+            },
+            'BNB': {
+                address: "0xcBC882F5d23F66951cc7DCE2632944dE3014B494",
+                decimals: 18,
+                explorer: "https://bscscan.com/tx/",
+                apiKey: "YOUR_BSCSCAN_API_KEY"
+            },
+            'SOL': {
+                address: "Et7v8GxurMATY2nkQFVie4cUzARdmdADjBEJofGVYrdH",
+                decimals: 9,
+                explorer: "https://solscan.io/tx/",
+                apiKey: "YOUR_SOLANA_API_KEY"
+            }
+        };
 
         // Story read more functionality
         document.getElementById("read-more").addEventListener("click", function() {
             document.getElementById("full-story").style.display = "block";
-            document.getElementById("read-more").style.display = "none";
+            this.style.display = "none";
         });
 
-        // Function to copy address to clipboard
+        // Copy address functionality
         function copyAddress(id) {
             const addressField = document.getElementById(id);
             addressField.select();
             document.execCommand("copy");
-            alert("Address copied to clipboard!");
+            
+            const button = addressField.nextElementSibling;
+            const originalText = button.textContent;
+            button.textContent = "Copied!";
+            setTimeout(() => {
+                button.textContent = originalText;
+            }, 2000);
         }
 
-        // Function to send Telegram message on donation
-        async function sendTelegramMessage(amount, coinType) {
-            const message = `New Donation Received: \nAmount: ${amount} ${coinType}\nThank you for your generosity!`;
-            const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    chat_id: chatId,
-                    text: message,
-                }),
-            });
-            const data = await response.json();
-            console.log(data);
-        }
-
-        // Function to check for donations
-        async function checkDonations() {
-            const addresses = [
-                "bc1qu2f5d8f4q3h9w8d7rg6d5zd20ehk0j68a2yrk9", // BTC
-                "0xcBC882F5d23F66951cc7DCE2632944dE3014B494", // ETH
-                "D63ewjeSWkmjVPQiKisyHJEZWnJw92eafj",         // DOGE
-                "TNZar2Ps5b2h9CubD8PciTtdJf3NQj7pws",         // USDT
-                "0xcBC882F5d23F66951cc7DCE2632944dE3014B494", // BNB
-                "Et7v8GxurMATY2nkQFVie4cUzARdmdADjBEJofGVYrdH"// SOL
-            ];
-
-            const transactions = [];
-            for (const address of addresses) {
-                let url = "";
-                if (address.startsWith("0x")) {  // ETH, BNB, and USDT
-                    url = `https://api.bscscan.com/api?module=account&action=txlist&address=${address}&apikey=FIVYJTTIV432VXWCQVD7EWQQN9YT816Z46`;
-                } else if (address.startsWith("bc1")) {  // BTC
-                    url = `https://api.blockcypher.com/v1/btc/main/addrs/${address}/full?token=8386eb37b0f64a57a73e2e951f471f37`;
-                } else if (address.startsWith("D63")) {  // DOGE
-                    url = `https://api.blockcypher.com/v1/doge/main/addrs/${address}/full?token=8386eb37b0f64a57a73e2e951f471f37`;
-                } else if (address.startsWith("T")) {  // USDT TRC20
-                    url = `https://api.trongrid.io/v1/accounts/${address}/transactions?limit=10`;
-                } else if (address.startsWith("Et7")) { // SOL
-                    url = `https://api.mainnet-beta.solana.com`;  // You would need to query Solana block details
-                }
-
-                // Fetch transaction data from relevant API
-                let response = await fetch(url);
-                let data = await response.json();
-
-                if (address.startsWith("0x")) { // ETH and BNB
-                    if (data.result) {
-                        data.result.forEach(tx => {
-                            transactions.push({
-                                address,
-                                txHash: tx.hash,
-                                amount: tx.value / 1e18,
-                                time: tx.timeStamp
-                            });
-                        });
-                    }
-                } else if (address.startsWith("bc1")) { // BTC
-                    if (data.txrefs) {
-                        data.txrefs.forEach(tx => {
-                            transactions.push({
-                                address,
-                                txHash: tx.tx_hash,
-                                amount: tx.value / 1e8, // BTC value in BTC
-                                time: new Date(tx.confirmed)
-                            });
-                        });
-                    }
-                } else if (address.startsWith("D63")) { // DOGE
-                    if (data.txrefs) {
-                        data.txrefs.forEach(tx => {
-                            transactions.push({
-                                address,
-                                txHash: tx.tx_hash,
-                                amount: tx.value / 1e8, // DOGE value in DOGE
-                                time: new Date(tx.confirmed)
-                            });
-                        });
-                    }
-                } else if (address.startsWith("T")) {  // USDT
-                    // Process TRC20 transactions similarly
-                    data.data.forEach(tx => {
-                        transactions.push({
-                            address,
-                            txHash: tx.txID,
-                            amount: tx.amount / 1e6, // USDT value in USDT
-                            time: new Date(tx.blockTime * 1000)
-                        });
-                    });
-                }
+        // Get cryptocurrency prices
+        async function getCryptoPrices() {
+            try {
+                const response = await fetch(
+                    `${COINGECKO_API}/simple/price?ids=bitcoin,ethereum,dogecoin,tether,binancecoin,solana&vs_currencies=usd`
+                );
+                return await response.json();
+            } catch (error) {
+                console.error('Error fetching crypto prices:', error);
+                return null;
             }
+        }
 
-            // Update the transaction records on the page
+        // Update progress bar
+        function updateProgress(totalUSD) {
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
+            const percentage = (totalUSD / TARGET_AMOUNT_USD) * 100;
+            
+            progressBar.style.width = `${Math.min(percentage, 100)}%`;
+            progressBar.textContent = `${percentage.toFixed(2)}%`;
+            progressText.textContent = `Current Donations: $${totalUSD.toLocaleString()} / $${TARGET_AMOUNT_USD.toLocaleString()}`;
+        }
+
+        // Update pagination controls
+        function updatePaginationControls(totalRecords) {
+            const totalPages = Math.ceil(totalRecords / recordsPerPage);
+            const prevButton = document.getElementById('prev-page');
+            const nextButton = document.getElementById('next-page');
+            const pageInfo = document.getElementById('page-info');
+
+            prevButton.disabled = currentPage === 1;
+            nextButton.disabled = currentPage === totalPages;
+            pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+        }
+
+        // Display current page transactions
+        function displayCurrentPageTransactions() {
+            const startIndex = (currentPage - 1) * recordsPerPage;
+            const endIndex = startIndex + recordsPerPage;
+            const currentRecords = allTransactions.slice(startIndex, endIndex);
+            
             const txList = document.getElementById("transaction-records");
-            txList.innerHTML = '';  // Clear previous records
-            transactions.forEach(tx => {
+            txList.innerHTML = '';
+            
+            currentRecords.forEach(tx => {
                 const listItem = document.createElement('li');
+                listItem.className = 'transaction-item';
+                if (isNewTransaction(tx.txHash)) {
+                    listItem.classList.add('new');
+                }
+                
                 listItem.innerHTML = `
-                    <strong>${tx.amount} ${tx.coinType}</strong><br>
-                    <em>Transaction ID:</em> <a href="https://bscscan.com/tx/${tx.txHash}" target="_blank">${tx.txHash}</a><br>
-                    <em>Time:</em> ${new Date(tx.time).toLocaleString()}
+                    <div class="transaction-amount">
+                        ${tx.amount.toFixed(8)} ${tx.coinType} 
+                        (≈ $${tx.usdValue.toFixed(2)})
+                    </div>
+                    <div class="transaction-hash">
+                        Transaction: 
+                        <a href="${CRYPTO_CONFIG[tx.coinType].explorer}${tx.txHash}" 
+                           target="_blank">
+                            ${tx.txHash.substring(0, 16)}...
+                        </a>
+                    </div>
+                    <div class="transaction-time">
+                        ${new Date(tx.time).toLocaleString()}
+                    </div>
                 `;
                 txList.appendChild(listItem);
             });
+
+            updatePaginationControls(allTransactions.length);
         }
 
+        // Send Telegram message
+        async function sendTelegramMessage(amount, coinType, txHash, usdValue) {
+            const message = `
+🎉 New Donation Received!
+Amount: ${amount} ${coinType}
+USD Value: $${usdValue.toFixed(2)}
+Transaction: ${CRYPTO_CONFIG[coinType].explorer}${txHash}
+Thank you for your generosity! 🙏
+            `;
+
+            try {
+                const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        chat_id: chatId,
+                        text: message,
+                        parse_mode: 'HTML'
+                    }),
+                });
+                const data = await response.json();
+                console.log('Telegram notification sent:', data);
+            } catch (error) {
+                console.error('Error sending Telegram notification:', error);
+            }
+        }
+
+        // Check if transaction is new
+        function isNewTransaction(txHash) {
+            const knownTxs = JSON.parse(localStorage.getItem('knownTransactions') || '[]');
+            if (!knownTxs.includes(txHash)) {
+                knownTxs.push(txHash);
+                localStorage.setItem('knownTransactions', JSON.stringify(knownTxs));
+                return true;
+            }
+            return false;
+        }
+
+        // Update transaction list
+        function updateTransactionList(transactions) {
+            allTransactions = transactions.sort((a, b) => b.time - a.time);
+            displayCurrentPageTransactions();
+        }
+
+        // Fetch transactions for specific cryptocurrency
+        async function fetchTransactions(coinType, config) {
+            const apiEndpoints = {
+                'BTC': `https://api.blockchair.com/bitcoin/transactions?address=${config.address}&key=${config.apiKey}`,
+                'ETH': `https://api.etherscan.io/api?module=account&action=txlist&address=${config.address}&apikey=${config.apiKey}`,
+                'DOGE': `https://api.blockcypher.com/v1/doge/main/addrs/${config.address}/full`,
+                'USDT': `https://api.trongrid.io/v1/accounts/${config.address}/transactions`,
+                'BNB': `https://api.bscscan.com/api?module=account&action=txlist&address=${config.address}&apikey=${config.apiKey}`,
+                'SOL': `https://api.mainnet-beta.solana.com`
+            };
+
+            try {
+                const response = await fetch(apiEndpoints[coinType]);
+                const data = await response.json();
+                
+                // 处理不同API的响应格式
+                return processTransactionData(data, coinType);
+            } catch (error) {
+                console.error(`Error fetching ${coinType} transactions:`, error);
+                return [];
+            }
+        }
+
+        // Process transaction data based on cryptocurrency type
+        function processTransactionData(data, coinType) {
+            switch(coinType) {
+                case 'BTC':
+                    return processBTCTransactions(data);
+                case 'ETH':
+                    return processETHTransactions(data);
+                case 'DOGE':
+                    return processDOGETransactions(data);
+                case 'USDT':
+                    return processUSDTTransactions(data);
+                case 'BNB':
+                    return processBNBTransactions(data);
+                case 'SOL':
+                    return processSOLTransactions(data);
+                default:
+                    return [];
+            }
+        }
+
+        // Check donations
+        async function checkDonations() {
+            document.getElementById('loading').style.display = 'block';
+            
+            try {
+                const prices = await getCryptoPrices();
+                let totalUSD = 0;
+                const transactions = [];
+
+                for (const [coinType, config] of Object.entries(CRYPTO_CONFIG)) {
+                    try {
+                        const txs = await fetchTransactions(coinType, config);
+                        
+                        for (const tx of txs) {
+                            const amount = tx.amount / Math.pow(10, config.decimals);
+                            const usdValue = amount * prices[coinType.toLowerCase()].usd;
+                            totalUSD += usdValue;
+
+                            transactions.push({
+                                coinType,
+                                amount,
+                                txHash: tx.hash,
+                                time: tx.timestamp,
+                                usdValue
+                            });
+
+                            if (isNewTransaction(tx.hash)) {
+                                await sendTelegramMessage(amount, coinType, tx.hash, usdValue);
+                            }
+                        }
+                    } catch (error) {
+                        console.error(`Error fetching ${coinType} transactions:`, error);
+                    }
+                }
+
+                updateProgress(totalUSD);
+                updateTransactionList(transactions);
+                currentTotalUSD = totalUSD;
+            } catch (error) {
+                console.error('Error in checkDonations:', error);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        // Add event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // Pagination controls
+            document.getElementById('prev-page').addEventListener('click', () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    displayCurrentPageTransactions();
+                }
+            });
+
+            document.getElementById('next-page').addEventListener('click', () => {
+                const totalPages = Math.ceil(allTransactions.length / recordsPerPage);
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    displayCurrentPageTransactions();
+                }
+            });
+
+            // Records per page selection
+            document.getElementById('records-per-page').addEventListener('change', (e) => {
+                recordsPerPage = parseInt(e.target.value);
+                currentPage = 1;
+                displayCurrentPageTransactions();
+            });
+        });
+
+        // Initialize and set up periodic checks
         checkDonations();
+        setInterval(checkDonations, 60000); // Check every minute
     </script>
 </body>
 </html>
