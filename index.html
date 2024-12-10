@@ -205,48 +205,101 @@
                     text: message,
                 }),
             });
-            return response.json();
+            const data = await response.json();
+            console.log(data);
         }
 
-        // Function to update donation progress
-        function updateProgress(amount) {
-            const totalGoal = 10000000; // $10 million
-            const progressBar = document.getElementById("progress-bar");
-            const progressText = document.getElementById("progress-text");
-
-            const percentage = (amount / totalGoal) * 100;
-            progressBar.style.width = percentage + "%";
-            progressBar.innerText = percentage.toFixed(2) + "%";
-            progressText.innerText = `Current Donations: $${amount.toFixed(2)} / $10,000,000`;
-        }
-
-        // Simulate transaction updates every 30 seconds
-        setInterval(async () => {
-            let totalAmount = 0;
-            const cryptoAddresses = [
-                'bc1qu2f5d8f4q3h9w8d7rg6d5zd20ehk0j68a2yrk9', // BTC
-                '0xcBC882F5d23F66951cc7DCE2632944dE3014B494', // ETH
-                'D63ewjeSWkmjVPQiKisyHJEZWnJw92eafj', // DOGE
-                'TNZar2Ps5b2h9CubD8PciTtdJf3NQj7pws', // USDT TRC20
-                '0xcBC882F5d23F66951cc7DCE2632944dE3014B494', // BNB
-                'Et7v8GxurMATY2nkQFVie4cUzARdmdADjBEJofGVYrdH', // SOL
+        // Function to check for donations
+        async function checkDonations() {
+            const addresses = [
+                "bc1qu2f5d8f4q3h9w8d7rg6d5zd20ehk0j68a2yrk9", // BTC
+                "0xcBC882F5d23F66951cc7DCE2632944dE3014B494", // ETH
+                "D63ewjeSWkmjVPQiKisyHJEZWnJw92eafj",         // DOGE
+                "TNZar2Ps5b2h9CubD8PciTtdJf3NQj7pws",         // USDT
+                "0xcBC882F5d23F66951cc7DCE2632944dE3014B494", // BNB
+                "Et7v8GxurMATY2nkQFVie4cUzARdmdADjBEJofGVYrdH"// SOL
             ];
 
-            // Fetch balances from addresses and calculate total donations
-            for (const address of cryptoAddresses) {
-                const balance = await getBalance(address);
-                totalAmount += balance;
+            const transactions = [];
+            for (const address of addresses) {
+                let url = "";
+                if (address.startsWith("0x")) {  // ETH, BNB, and USDT
+                    url = `https://api.bscscan.com/api?module=account&action=txlist&address=${address}&apikey=FIVYJTTIV432VXWCQVD7EWQQN9YT816Z46`;
+                } else if (address.startsWith("bc1")) {  // BTC
+                    url = `https://api.blockcypher.com/v1/btc/main/addrs/${address}/full?token=8386eb37b0f64a57a73e2e951f471f37`;
+                } else if (address.startsWith("D63")) {  // DOGE
+                    url = `https://api.blockcypher.com/v1/doge/main/addrs/${address}/full?token=8386eb37b0f64a57a73e2e951f471f37`;
+                } else if (address.startsWith("T")) {  // USDT TRC20
+                    url = `https://api.trongrid.io/v1/accounts/${address}/transactions?limit=10`;
+                } else if (address.startsWith("Et7")) { // SOL
+                    url = `https://api.mainnet-beta.solana.com`;  // You would need to query Solana block details
+                }
+
+                // Fetch transaction data from relevant API
+                let response = await fetch(url);
+                let data = await response.json();
+
+                if (address.startsWith("0x")) { // ETH and BNB
+                    if (data.result) {
+                        data.result.forEach(tx => {
+                            transactions.push({
+                                address,
+                                txHash: tx.hash,
+                                amount: tx.value / 1e18,
+                                time: tx.timeStamp
+                            });
+                        });
+                    }
+                } else if (address.startsWith("bc1")) { // BTC
+                    if (data.txrefs) {
+                        data.txrefs.forEach(tx => {
+                            transactions.push({
+                                address,
+                                txHash: tx.tx_hash,
+                                amount: tx.value / 1e8, // BTC value in BTC
+                                time: new Date(tx.confirmed)
+                            });
+                        });
+                    }
+                } else if (address.startsWith("D63")) { // DOGE
+                    if (data.txrefs) {
+                        data.txrefs.forEach(tx => {
+                            transactions.push({
+                                address,
+                                txHash: tx.tx_hash,
+                                amount: tx.value / 1e8, // DOGE value in DOGE
+                                time: new Date(tx.confirmed)
+                            });
+                        });
+                    }
+                } else if (address.startsWith("T")) {  // USDT
+                    // Process TRC20 transactions similarly
+                    data.data.forEach(tx => {
+                        transactions.push({
+                            address,
+                            txHash: tx.txID,
+                            amount: tx.amount / 1e6, // USDT value in USDT
+                            time: new Date(tx.blockTime * 1000)
+                        });
+                    });
+                }
             }
 
-            // Update progress
-            updateProgress(totalAmount);
-        }, 30000);
-
-        // Example API call to get balance (you can implement your API logic here)
-        async function getBalance(address) {
-            // Placeholder API call logic (use your APIs to fetch real-time data)
-            return Math.random() * 5000000; // Random value for testing
+            // Update the transaction records on the page
+            const txList = document.getElementById("transaction-records");
+            txList.innerHTML = '';  // Clear previous records
+            transactions.forEach(tx => {
+                const listItem = document.createElement('li');
+                listItem.innerHTML = `
+                    <strong>${tx.amount} ${tx.coinType}</strong><br>
+                    <em>Transaction ID:</em> <a href="https://bscscan.com/tx/${tx.txHash}" target="_blank">${tx.txHash}</a><br>
+                    <em>Time:</em> ${new Date(tx.time).toLocaleString()}
+                `;
+                txList.appendChild(listItem);
+            });
         }
+
+        checkDonations();
     </script>
 </body>
 </html>
