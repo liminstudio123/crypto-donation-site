@@ -266,8 +266,10 @@
         
         // Target amount configuration
         const TARGET_AMOUNT_USD = 10000000; // $10M
-        const INITIAL_AMOUNT_USD = 1976500; // $1,976,500 初始金额
-        let currentTotalUSD = INITIAL_AMOUNT_USD; // 初始化当前总额
+        const INITIAL_AMOUNT_USD = 1976500; // $1,976,500
+        let currentTotalUSD = INITIAL_AMOUNT_USD;
+        let lastBalances = {};
+        let notifiedTransactions = new Set();
 
         // 分页状态管理
         let currentPage = 1;
