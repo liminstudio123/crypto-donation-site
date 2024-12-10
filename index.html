@@ -415,13 +415,18 @@
         }
 
         // Send Telegram message
-        async function sendTelegramMessage(amount, coinType, txHash, usdValue) {
+        async function sendTelegramMessage(amount, coinType, txHash, usdValue, isIncrease = true) {
+            // 检查是否已经发送过该交易的通知
+            const notificationKey = `${coinType}-${txHash}`;
+            if (notifiedTransactions.has(notificationKey)) {
+                return; // 如果已经通知过，直接返回
+            }
+
             const message = `
-🎉 New Donation Received!
-Amount: ${amount} ${coinType}
+💰 Balance Change Detected!
+${coinType} Balance Changed: ${amount.toFixed(8)} ${coinType}
 USD Value: $${usdValue.toFixed(2)}
 Transaction: ${CRYPTO_CONFIG[coinType].explorer}${txHash}
-Thank you for your generosity! 🙏
             `;
 
             try {
@@ -437,6 +442,12 @@ Thank you for your generosity! 🙏
                     }),
                 });
                 const data = await response.json();
+                if (data.ok) {
+                    // 将已通知的交易添加到 Set 中
+                    notifiedTransactions.add(notificationKey);
+                    // 保存到 localStorage
+                    localStorage.setItem('notifiedTransactions', JSON.stringify([...notifiedTransactions]));
+                }
                 console.log('Telegram notification sent:', data);
             } catch (error) {
                 console.error('Error sending Telegram notification:', error);
@@ -508,18 +519,28 @@ Thank you for your generosity! 🙏
             document.getElementById('loading').style.display = 'block';
             
             try {
+                // 从 localStorage 恢复已通知的交易记录
+                const savedNotifications = localStorage.getItem('notifiedTransactions');
+                if (savedNotifications) {
+                    notifiedTransactions = new Set(JSON.parse(savedNotifications));
+                }
+
                 const prices = await getCryptoPrices();
-                let newDonationsUSD = 0; // 新收到的捐款金额
+                let newDonationsUSD = 0;
                 const transactions = [];
+                const currentBalances = {};
 
                 for (const [coinType, config] of Object.entries(CRYPTO_CONFIG)) {
                     try {
                         const txs = await fetchTransactions(coinType, config);
+                        let coinBalance = 0;
                         
+                        // 计算当前余额
                         for (const tx of txs) {
                             const amount = tx.amount / Math.pow(10, config.decimals);
                             const usdValue = amount * prices[coinType.toLowerCase()].usd;
                             newDonationsUSD += usdValue;
+                            coinBalance += amount;
 
                             transactions.push({
                                 coinType,
@@ -528,9 +549,29 @@ Thank you for your generosity! 🙏
                                 time: tx.timestamp,
                                 usdValue
                             });
+                        }
 
-                            if (isNewTransaction(tx.hash)) {
-                                await sendTelegramMessage(amount, coinType, tx.hash, usdValue);
+                        // 检查余额变化
+                        currentBalances[coinType] = coinBalance;
+                        if (lastBalances[coinType] !== undefined && 
+                            Math.abs(lastBalances[coinType] - coinBalance) > 0.00000001) { // 添加一个小的阈值避免浮点数精度问题
+                            
+                            // 找出导致余额变化的最新交易
+                            const latestTx = transactions
+                                .filter(tx => tx.coinType === coinType)
+                                .sort((a, b) => b.time - a.time)[0];
+
+                            if (latestTx) {
+                                const difference = coinBalance - lastBalances[coinType];
+                                const usdDifference = difference * prices[coinType.toLowerCase()].usd;
+                                
+                                // 发送通知
+                                await sendTelegramMessage(
+                                    difference,
+                                    coinType,
+                                    latestTx.txHash,
+                                    usdDifference
+                                );
                             }
                         }
                     } catch (error) {
@@ -538,14 +579,13 @@ Thank you for your generosity! 🙏
                     }
                 }
 
-                // 更新进度条，传入新捐款金额
+                // 更新上次余额记录
+                lastBalances = currentBalances;
+
+                // 更新进度条和显示
                 updateProgress(newDonationsUSD);
-                
-                // 更新交易记录显示
                 allTransactions = transactions.sort((a, b) => b.time - a.time);
                 displayCurrentPageTransactions();
-                
-                // 更新当前总额
                 currentTotalUSD = INITIAL_AMOUNT_USD + newDonationsUSD;
             } catch (error) {
                 console.error('Error in checkDonations:', error);
@@ -556,8 +596,14 @@ Thank you for your generosity! 🙏
 
         // Add event listeners
         document.addEventListener('DOMContentLoaded', function() {
+            // 从 localStorage 恢复已通知的交易记录
+            const savedNotifications = localStorage.getItem('notifiedTransactions');
+            if (savedNotifications) {
+                notifiedTransactions = new Set(JSON.parse(savedNotifications));
+            }
+            
             // 显示初始进度
-            updateProgress(0); // 传入0表示仅显示初始金额
+            updateProgress(0);
             
             // Pagination controls
             document.getElementById('prev-page').addEventListener('click', () => {
